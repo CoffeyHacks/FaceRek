@@ -1,0 +1,66 @@
+import cv2
+import face_recognition
+import yagmail
+import datetime
+import logging
+
+# create a logging file
+logging.basicConfig(filename='face_detection.log', level=logging.INFO)
+
+# login to your email account
+yag = yagmail.SMTP("your_email@gmail.com", "your_password") 
+
+# load known faces
+known_faces = [
+    ('known_face_1', face_recognition.load_image_file('known_face_1.jpg')),
+    ('known_face_2', face_recognition.load_image_file('known_face_2.jpg')),
+    # ...
+]
+known_face_encodings = [
+    face_recognition.face_encodings(face)[0]
+    for _, face in known_faces
+]
+
+# initialize the video stream
+camera = cv2.VideoCapture(0)
+
+face_counts = {}
+
+while True:
+    # grab the frame from the video stream
+    ret, frame = camera.read()
+
+    # convert the frame to RGB
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    # detect faces in the frame
+    face_locations = face_recognition.face_locations(rgb_frame)
+    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+
+    # loop over the face encodings
+    for face_encoding in face_encodings:
+        # see if the face is a match for the known face(s)
+        matches = face_recognition.compare_faces(known_face_encodings, face_encoding)
+
+        # loop over the matches
+        for i, match in enumerate(matches):
+            if match:
+                # get the current timestamp
+                timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                # get the matched face name
+                matched_face_name = known_faces[i][0]
+                # send push notification email
+                to_email = 'recipient_email@example.com'
+                subject = 'Face Recognition Alert'
+                body = f'A matching face has been detected at {timestamp}.'
+                yag.send(to=to_email, subject=subject, contents=body)
+                # update the face count
+                if matched_face_name in face_counts:
+                    face_counts[matched_face_name] += 1
+                else:
+                    face_counts[matched_face_name] = 1
+                # log the detection
+                logging.info(f'{matched_face_name} detected at {timestamp}. Count: {face_counts[matched_face_name]}')
+
+# release the camera
+camera.release()
